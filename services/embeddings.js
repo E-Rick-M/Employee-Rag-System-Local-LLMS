@@ -1,12 +1,12 @@
 import {pinecone, index} from "./pinecone.js";
 import {v4 as uuidv4} from "uuid";
 import {OpenAI} from "openai";
-
+import axios from "axios";
 const openai=new OpenAI({
     baseURL:"http://localhost:11434/v1",
     apiKey:"sk-proj-1234567890",
 });
-// const namespace = pinecone.index("employee-demo-rag", "https://employee-demo-rag-mlstjsu.svc.aped-4627-b74a.pinecone.io").namespace("employee-demo-rag");
+
 
 export const DUMMY_EMPLOYEES=[
     {
@@ -52,44 +52,23 @@ export const DUMMY_EMPLOYEES=[
 ]
 
 export async function getEmbeddings(text){
-
-    // const res=pinecone.c
-    // const response=await pinecone.embeddings.create({
-    //     model:"text-embedding-3-large",
-    //     input:text,
-    // });
-    // return response.data[0].embedding;
-    // const client=new OpenAI({
-    //     base_url:"http://localhost:11434/v1",
-    //     apiKey:"sk-proj-1234567890",
-    // });
     try{
-
-    const response=await openai.embeddings.create({
-        // model:"text-embedding-3-large",
-        model:"mxbai-embed-large:latest",
-        input:text,
-        dimensions:1536,
-    });
-    return response.data[0].embedding;
+        const response=await axios.post('http://localhost:11434/api/embed',{
+            model:"mxbai-embed-large:latest",
+            input:JSON.stringify(text),
+        });
+        console.log('response from axios',response.data.embeddings[0]);
+        return response.data.embeddings[0];
     }catch(error){
         console.error('Error generating embeddings:', error);
         throw error;
     }
 }
 
-// await pinecone.createIndexForModel({
-//     model: "text-embedding-3-large",
-//     client:'aws',
-//     dimensions: 1536,
-//     metric: "cosine",
-//     name: index,
-//     wait:true,
-// });
-
 export async function UpsertEmbeddings(text,isInitial=false){
+    const indexName=pinecone.Index('employee-demo-rag2');
+    const db=indexName.namespace('employees')
     const uuid=uuidv4();
-   const index=pinecone.Index('employee-demo-rag');
    if(!index){
     throw new Error("Index not found");
    }
@@ -98,6 +77,7 @@ export async function UpsertEmbeddings(text,isInitial=false){
    }
 
    if(isInitial){
+    const employeeTexts=[];
     for(const employee of text){
         const employeeText=`
         ID: ${employee.id}
@@ -108,30 +88,35 @@ export async function UpsertEmbeddings(text,isInitial=false){
         Skills: ${(employee.skills || '').split(',').map(skill=>`- ${skill}`).join('\n')}
         `
         const embedding = await getEmbeddings(employeeText);
-        await index.upsert({
-            vectors: [{
+        await db.upsert(
+            [{
                 id: employee.id.toString(),
                 values: embedding,
-                metadata:{
-                    name:employee.name,
-                    email:employee.email,
-                    role:employee.role,
-                    department:employee.department,
-                    skills:employee.skills
+                metadata: {
+                    name: employee.name,
+                    email: employee.email,
+                    role: employee.role,
+                    department: employee.department,
+                    skills: employee.skills
                 }
             }]
-        });
+        );
         console.log(`Initial Employee ${employee.id} added to Pinecone`);
+            employeeTexts.push(employeeText);
     }
+    return employeeTexts;
    }else{
         const embedding = await getEmbeddings(text);
-        await index.upsert({
-            vectors: [{
-                id: uuid,
-                values: embedding
+        await db.upsert([{
+            id: uuid,
+            values: embedding,
+            metadata: {
+                    text: text
+                }
             }]
-        });
+        );
         console.log(`Employee ${uuid} added to Pinecone`);
+        return text;
    }
 }
 
@@ -163,15 +148,10 @@ export async function getLLMResponse(text,contextChunks){
     You are given a question and you need to answer it based on the information provided.
     ${text}
     `
-    // const client=new OpenAI({
-    //     base_url:"http://localhost:11434/v1",
-    //     apiKey:"sk-proj-1234567890",
-    // });
     const response=await openai.chat.completions.create({
         model:"gemma3:4b-it-qat",
         messages:[{role:"user",content:adjustedPrompt}],
         stream:false,
-        // response_format:{type:"json_object"}
     });
    console.log('response from gemma3',response);
    return response.choices[0].message.content;

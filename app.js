@@ -7,12 +7,6 @@ const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
 });
-
-// rl.question("Enter a question: ", (question) => {
-//     console.log(`You entered: ${question}`);
-//     rl.close();
-// });
-
 function askQuestion(questionAsked) {
     return new Promise((resolve) => {
         rl.question(questionAsked, (questionAsked) => {
@@ -28,12 +22,12 @@ async function main() {
     const mode=await askQuestion(`Enter the mode (1 : add , 2 : search): `);
     if(mode==="1"){
 
-        if(isInitial){
-            const response=await UpsertEmbeddings(DUMMY_EMPLOYEES,true);
-            console.log('response from upsert embeddings',response);
-            isInitial=false;
-            return;
-        }
+        // if(isInitial){
+        //     const response=await UpsertEmbeddings(DUMMY_EMPLOYEES,true);
+        //     console.log('response from upsert embeddings',response);
+        //     isInitial=false;
+        //     return;
+        // }
 
         const id=await askQuestion("Enter the employee id: ");
         const name=await askQuestion("Enter the employee name: ");
