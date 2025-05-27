@@ -1,0 +1,192 @@
+import {pinecone, index} from "./pinecone.js";
+import {v4 as uuidv4} from "uuid";
+import {OpenAI} from "openai";
+
+const openai=new OpenAI({
+    baseURL:"http://localhost:11434/v1",
+    apiKey:"sk-proj-1234567890",
+});
+// const namespace = pinecone.index("employee-demo-rag", "https://employee-demo-rag-mlstjsu.svc.aped-4627-b74a.pinecone.io").namespace("employee-demo-rag");
+
+export const DUMMY_EMPLOYEES=[
+    {
+        id:1,
+        name:"John Doe",
+        email:"john.doe@example.com",
+        role:"Software Engineer",
+        department:"Engineering",
+        skills:"JavaScript, Python, React"
+    },
+    {
+        id:2,
+        name:"Jane Smith",
+        email:"jane.smith@example.com",
+        role:"Product Manager",
+        department:"Product",
+        skills:"Product Management, Agile, Scrum"
+    },
+    {
+        id:3,
+        name:"Michael Brown",
+        email:"michael.brown@example.com",
+        role:"Data Analyst",
+        department:"Data",
+        skills:"SQL, Python, Data Visualization"
+    },
+    {
+        id:4,
+        name:"Emily Davis",
+        email:"emily.davis@example.com",
+        role:"Marketing Specialist",
+        department:"Marketing",
+        skills:"Digital Marketing, Social Media, Content Creation"
+    },
+    {
+        id:5,
+        name:"Robert Wilson",
+        email:"robert.wilson@example.com",
+        role:"Sales Manager",
+        department:"Sales",
+        skills:"Sales, Marketing, Customer Service"
+    }
+]
+
+export async function getEmbeddings(text){
+
+    // const res=pinecone.c
+    // const response=await pinecone.embeddings.create({
+    //     model:"text-embedding-3-large",
+    //     input:text,
+    // });
+    // return response.data[0].embedding;
+    // const client=new OpenAI({
+    //     base_url:"http://localhost:11434/v1",
+    //     apiKey:"sk-proj-1234567890",
+    // });
+    try{
+
+    const response=await openai.embeddings.create({
+        // model:"text-embedding-3-large",
+        model:"mxbai-embed-large:latest",
+        input:text,
+        dimensions:1536,
+    });
+    return response.data[0].embedding;
+    }catch(error){
+        console.error('Error generating embeddings:', error);
+        throw error;
+    }
+}
+
+// await pinecone.createIndexForModel({
+//     model: "text-embedding-3-large",
+//     client:'aws',
+//     dimensions: 1536,
+//     metric: "cosine",
+//     name: index,
+//     wait:true,
+// });
+
+export async function UpsertEmbeddings(text,isInitial=false){
+    const uuid=uuidv4();
+   const index=pinecone.Index('employee-demo-rag');
+   if(!index){
+    throw new Error("Index not found");
+   }
+   if(!text){
+    throw new Error("Text not found to generate embeddings");
+   }
+
+   if(isInitial){
+    for(const employee of text){
+        const employeeText=`
+        ID: ${employee.id}
+        Name: ${employee.name}  
+        Email: ${employee.email}
+        Role: ${employee.role}
+        Department: ${employee.department}
+        Skills: ${(employee.skills || '').split(',').map(skill=>`- ${skill}`).join('\n')}
+        `
+        const embedding = await getEmbeddings(employeeText);
+        await index.upsert({
+            vectors: [{
+                id: employee.id.toString(),
+                values: embedding,
+                metadata:{
+                    name:employee.name,
+                    email:employee.email,
+                    role:employee.role,
+                    department:employee.department,
+                    skills:employee.skills
+                }
+            }]
+        });
+        console.log(`Initial Employee ${employee.id} added to Pinecone`);
+    }
+   }else{
+        const embedding = await getEmbeddings(text);
+        await index.upsert({
+            vectors: [{
+                id: uuid,
+                values: embedding
+            }]
+        });
+        console.log(`Employee ${uuid} added to Pinecone`);
+   }
+}
+
+
+export async function queryEmbeddingsEmployee(textQuery){
+
+    const index=pinecone.Index(index);
+    if(!index){
+        throw new Error("Index not found");
+    }
+
+    const results = await index.searchRecords({
+        query: {
+          topK: 10,
+            inputs: { text: textQuery },
+        },
+      });
+      console.log('results from pinecone query embeddings',results);
+      // Print the results
+      results.result.hits.forEach(hit => {
+        console.log(`id: ${hit.id}`);
+      });
+    
+}
+
+export async function getLLMResponse(text,contextChunks){
+    const adjustedPrompt=`
+    You are a helpful assistant that can answer questions about the employees in the company.
+    You are given a question and you need to answer it based on the information provided.
+    ${text}
+    `
+    // const client=new OpenAI({
+    //     base_url:"http://localhost:11434/v1",
+    //     apiKey:"sk-proj-1234567890",
+    // });
+    const response=await openai.chat.completions.create({
+        model:"gemma3:4b-it-qat",
+        messages:[{role:"user",content:adjustedPrompt}],
+        stream:false,
+        // response_format:{type:"json_object"}
+    });
+   console.log('response from gemma3',response);
+   return response.choices[0].message.content;
+}
+
+
+export async function queryEmbeddings(queryVec){
+    const index=pinecone.Index(index);
+    if(!index){
+        throw new Error("Index not found");
+    }
+    const results=await index.queryRecords({
+        query:queryVec,
+        topK:10,
+        includeValues:true,
+    });
+    return results.result.hits;
+}

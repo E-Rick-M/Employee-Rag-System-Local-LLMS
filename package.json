@@ -1,0 +1,19 @@
+{
+  "name": "employee-rag",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node --watch --env-file=.env app.js"
+  },
+  "type": "module",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@pinecone-database/pinecone": "^6.0.1",
+    "openai": "^4.103.0",
+    "uuid": "^11.1.0"
+  }
+}
