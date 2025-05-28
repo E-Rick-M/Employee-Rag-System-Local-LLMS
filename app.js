@@ -1,5 +1,5 @@
 import readline from "readline";
-import {UpsertEmbeddings, getLLMResponse, getEmbeddings, queryEmbeddings} from "./services/embeddings.js";
+import {UpsertEmbeddings, getLLMResponse, queryEmbeddings} from "./services/embeddings.js";
 import DUMMY_EMPLOYEES from "./data/data.js";
 let isInitial = true;
 
@@ -45,10 +45,48 @@ async function addEmployee() {
 }
 
 async function searchEmployees() {
-    const question = await askQuestion("Enter your question about employees: ");
-    const employeeData = await queryEmbeddings(question);
-    const response = await getLLMResponse(employeeData, question);
-    console.log('\nAssistant:', response, '\n');
+    console.log('\nConversation Mode (type "menu" to return to main menu, "quit" to exit)');
+    console.log('----------------------------------------');
+    
+    let conversationHistory = [];
+    
+    while (true) {
+        const question = await askQuestion("\nYour question: ");
+        
+        if (question.toLowerCase() === 'menu') {
+            console.log('Returning to main menu...');
+            return;
+        }
+        if (question.toLowerCase() === 'quit') {
+            console.log('Thank you for using the Employee RAG system. Goodbye!');
+            rl.close();
+            process.exit(0);
+        }
+
+        const employeeData = await queryEmbeddings(question);
+        const response = await getLLMResponse(employeeData, question, conversationHistory);
+        console.log('\nAssistant:', response);
+        
+        // Add the current exchange to conversation history
+        conversationHistory.push(
+            { role: "user", content: question },
+            { role: "assistant", content: response }
+        );
+        
+        const followUp = await askQuestion('\nWould you like to ask another question? (yes/no/menu/quit): ');
+        if (followUp.toLowerCase() === 'no' || followUp.toLowerCase() === 'menu') {
+            console.log('Returning to main menu...');
+            return;
+        }
+        if (followUp.toLowerCase() === 'quit') {
+            console.log('Thank you for using the Employee RAG system. Goodbye!');
+            rl.close();
+            process.exit(0);
+        }
+        if (followUp.toLowerCase() === 'yes') {
+            continue;
+        }
+    }
 }
 
 async function main() {

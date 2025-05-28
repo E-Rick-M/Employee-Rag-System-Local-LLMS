@@ -99,24 +99,28 @@ export async function queryEmbeddings(textQuery){
         includeMetadata:true
 
       });
-      console.log('results from pinecone query embeddings',results);
       const employeeData=results.matches.map(hit=>hit.metadata);
-      console.log('employee data from pinecone query embeddings',employeeData);
     return employeeData;
 }
 
-export async function getLLMResponse(employeeData,textQuery){
-    const adjustedPrompt=`
-    You are a helpful assistant that can answer questions about the employees in the company.
-   The user has asked the question ${textQuery}. here is the data about all the company employees:
-   ${JSON.stringify(employeeData)}
+export async function getLLMResponse(employeeData, textQuery, conversationHistory = []){
+    const systemPrompt = `You are a helpful assistant that can answer questions about the employees in the company.
+    Here is the data about all the company employees:
+    ${JSON.stringify(employeeData)}
+    
+    Maintain a conversational tone and use the conversation history to provide context-aware responses.`;
 
-    `
-    const response=await openai.chat.completions.create({
-        model:"gemma3:4b-it-qat",
-        messages:[{role:"user",content:adjustedPrompt}],
-        stream:false,
+    const messages = [
+        { role: "system", content: systemPrompt },
+        ...conversationHistory,
+        { role: "user", content: textQuery }
+    ];
+
+    const response = await openai.chat.completions.create({
+        model: "gemma3:4b-it-qat",
+        messages: messages,
+        stream: false,
     });
-   console.log('Assistant response',response);
-   return response.choices[0].message.content;
+    console.log('Assistant response', response);
+    return response.choices[0].message.content;
 }
