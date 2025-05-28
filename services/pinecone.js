@@ -4,7 +4,8 @@ const pinecone = new Pinecone({
     apiKey: process.env.PINECONE_API_KEY,
 });
 
-const index = pinecone.Index("employee-demo-rag2S");
+if (!process.env.PINECONE_API_KEY) {
+    throw new Error("PINECONE_API_KEY is not set");
+}   
 
-export default index;
-export {pinecone,index};
+export {pinecone};
